@@ -1,3 +1,11 @@
+/dataset/*
+*.jpg
+*.ipynb
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
 # Python
 __pycache__/
 *.py[cod]
