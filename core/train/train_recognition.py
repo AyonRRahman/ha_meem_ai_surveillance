@@ -25,8 +25,8 @@ CONFIG = {
     'batch_size': 64,
     'test_size': 0.3,
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-    'epochs_warmup': 10,           # head only
-    'epochs_full': 30,            # full fine-tune
+    'epochs_warmup': 50,           # head only
+    'epochs_full': 300,            # full fine-tune
     'lr_head': 5e-4,
     'lr_backbone': 5e-6,
     'weight_decay': 1e-5,
@@ -34,7 +34,7 @@ CONFIG = {
     'k_neighbors': 7,
     'contrast_lambda': 0.5,
     'embedding_size': 512,
-    'adaface_repo_path': '/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/AdaFace',
+    'adaface_repo_path': 'models/AdaFace',
 }
 
 import sys

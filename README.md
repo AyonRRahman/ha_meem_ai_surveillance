@@ -24,5 +24,3 @@ A professional-grade AI surveillance system for real-time inference and data man
    ```bash
    python apps/entry_pipeline/main.py
    ```
-
-test fork
