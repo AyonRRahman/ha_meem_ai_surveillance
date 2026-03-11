@@ -15,7 +15,7 @@ A professional-grade AI surveillance system for real-time inference and data man
 
 ## Setup
 
-1. Install dependencies:
+<!-- 1. Install dependencies:
    ```bash
    pip install -r requirements/base.txt
    ```
@@ -23,4 +23,19 @@ A professional-grade AI surveillance system for real-time inference and data man
 3. Run the entry pipeline:
    ```bash
    python apps/entry_pipeline/main.py
-   ```
+   ``` -->
+
+# Create the conda environment from environment.yml
+1. '''bash
+   conda env create -f environment.yml
+   '''
+
+# Activate the environment
+2. '''bash
+   conda activate fr_env
+   '''
+
+# Install additional development dependencies
+3. '''bash
+   pip install -r requirements_dev.txt
+   '''
