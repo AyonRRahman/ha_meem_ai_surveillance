@@ -26,16 +26,16 @@ A professional-grade AI surveillance system for real-time inference and data man
    ``` -->
 
 # Create the conda environment from environment.yml
-'''bash
+```bash
    conda env create -f environment.yml
-   '''
+   ```
 
 # Activate the environment
-'''bash
+```bash
    conda activate fr_env
-   '''
+   ```
 
 # Install additional development dependencies
-'''bash
+```bash
    pip install -r requirements_dev.txt
-   '''
+   ```
