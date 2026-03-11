@@ -1,6 +1,7 @@
 import sys 
 import os 
 import cv2
+import subprocess
 
 # Get absolute path appended tot sys path of project
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +22,108 @@ def get_all_name(dir):
         person_list.add(name) 
     
     return person_list
+
+def repair_video_with_ffmpeg(video_path):
+    print("⚠️ Video decoding failed. Repairing video with FFmpeg...")
+
+    tmp_path = video_path + ".tmp.mp4"
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-fflags", "+genpts",
+        "-err_detect", "ignore_err",
+        "-i", video_path,
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-an",
+        tmp_path
+    ]
+
+    subprocess.run(cmd, check=True)
+
+    # Replace original video
+    os.replace(tmp_path, video_path)
+
+    print("✅ Video repaired successfully.")
+
+
+def extract_frames_with_repair(video_path, output_folder, video_number = 1, save_freq = 10):
+    """
+    Extracts all frames from a video file and saves them as JPEG images.
+
+    Args:
+        video_path (str): Path to the input video file.
+        output_folder (str): Directory to save the extracted frames.
+    """
+
+    def run_extraction():
+        # Open the video file
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video file {video_path}")
+            return 0
+
+        frame_count = 0
+        print(f"Starting frame extraction from {video_path}...")
+
+        while True:
+            ret, frame = cap.read()
+
+            if not ret:
+                break
+
+            frame_filename = os.path.join(
+                output_folder,
+                f"frame_{video_number}_{frame_count:04d}.jpg"
+            )
+
+            if frame_count % save_freq == 0:
+                cv2.imwrite(frame_filename, frame)
+
+            frame_count += 1
+
+        cap.release()
+        print(f"Video capture object released. Total frames: {frame_count}")
+        return frame_count
+
+
+    # Create the output directory if it doesn't exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print(f"Created output folder: {output_folder}")
+
+    # ---------- First attempt ----------
+    frame_count = run_extraction()
+
+    # ---------- If failed, repair video ----------
+    if frame_count == 0:
+        print("⚠️ No frames extracted. Attempting FFmpeg repair...")
+
+        tmp_video = video_path + ".tmp.mp4"
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-fflags", "+genpts",
+            "-err_detect", "ignore_err",
+            "-i", video_path,
+            "-c:v", "copy",
+            "-an",
+            tmp_video
+        ]
+
+        try:
+            subprocess.run(cmd, check=True)
+            os.replace(tmp_video, video_path)
+            print("✅ Video repaired. Retrying extraction...")
+
+            # Retry extraction
+            run_extraction()
+
+        except Exception as e:
+            print("❌ FFmpeg repair failed:", e)
 
 def extract_frames(video_path, output_folder, video_number = 1, save_freq = 10):
     """
@@ -84,7 +187,7 @@ if __name__=="__main__":
     os.makedirs(aligned_face_dir, exist_ok=True)
 
     names = get_all_name(cctv_footage_dir)
-
+    print(f"Found Names: {names}")
     for name in names:
         print(f"processing dataset for for {name}")
         filtered_vdos = [video for video in all_videos if name in video.lower()]
@@ -93,7 +196,7 @@ if __name__=="__main__":
         os.makedirs(aligned_save_dir, exist_ok=True)
 
         for i, vdo_name in enumerate(filtered_vdos):
-            extract_frames(os.path.join(cctv_footage_dir, vdo_name), output_folder=save_dir, video_number=i, save_freq=5)
+            extract_frames_with_repair(os.path.join(cctv_footage_dir, vdo_name), output_folder=save_dir, video_number=i, save_freq=5)
         
         for image in os.listdir(save_dir):
             img_path = os.path.join(save_dir, image)
