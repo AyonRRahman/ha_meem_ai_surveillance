@@ -170,8 +170,7 @@ def extract_frames(video_path, output_folder, video_number = 1, save_freq = 10):
     print(f"Video capture object released. Total frames: {frame_count}")
 
 
-if __name__=="__main__":
-
+def old_main():
     app = FaceAnalysis(name='buffalo_l',
                    providers=['CUDAExecutionProvider', 'CPUExecutionProvider'],
                    allowed_modules=['detection'])
@@ -220,5 +219,64 @@ if __name__=="__main__":
             cv2.imwrite(out_path, aligned_face)
             
             
-            
+def process_aligned_faces(face_dir, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    all_faces = os.listdir(face_dir)
+    print(f"No total faces found {len(all_faces)}")
+
+    names = set()
+    for faces in all_faces:
+         name = faces.lower().split('_')[0]
+         names.add(name)
+    
+    print(f"Different Unique names found {names}")
+
+    for name in names:
+        name_dir = os.path.join(output_dir, name)
+        os.makedirs(name_dir, exist_ok=True)
+
+        filtered_faces = [face for face in all_faces if face.lower().split('_')[0]==name]
+        print(f"total faces found for {name} is {len(filtered_faces)}")
+
         
+def main():
+    app = FaceAnalysis(name='buffalo_l',
+                   providers=['CUDAExecutionProvider', 'CPUExecutionProvider'],
+                   allowed_modules=['detection'])
+    app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.5)
+
+
+    save_dir = '/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/output'
+    aligned_face_dir = '/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/office_dataset_aligned'
+
+    os.makedirs(aligned_face_dir, exist_ok=True)
+    
+    for i, image in enumerate(os.listdir(save_dir)):
+        print(f"processing {i+1}/{len(os.listdir(save_dir))}", end='\r')
+        img_path = os.path.join(save_dir, image)
+        img = cv2.imread(img_path)
+        if img is None:
+            print(f"Failed to read {img_path}")
+            continue
+        
+        #for training only 1 face
+        faces = detect_faces(img, app)
+        if faces is None:
+            continue
+        face = faces[0]
+        face_width_px = face['bbox'][2] - face['bbox'][0]
+        if face_width_px<150: #filter based on face width
+            continue
+        
+        aligned_face = align_face(img, face.kps, output_size=(112,112)) #adaface expects this size
+        
+        out_path = os.path.join(aligned_face_dir, image)
+        cv2.imwrite(out_path, aligned_face)
+
+
+if __name__=="__main__":
+    main()
+    process_aligned_faces(face_dir='/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/office_dataset_aligned',
+                          output_dir='/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/office_dataset_aligned_sorted'
+                          )
+    
