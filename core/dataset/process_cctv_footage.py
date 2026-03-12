@@ -273,10 +273,54 @@ def main():
         out_path = os.path.join(aligned_face_dir, image)
         cv2.imwrite(out_path, aligned_face)
 
+def main_new():
+    app = FaceAnalysis(name='buffalo_l',
+                   providers=['CUDAExecutionProvider', 'CPUExecutionProvider'],
+                   allowed_modules=['detection'])
+    app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.5)
+
+
+    dataset_dir = '/media/ayon/New Volume/Hamim_FR/all_pictures'
+    aligned_face_dir = '/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/all_pic_aligned'
+    os.makedirs(aligned_face_dir, exist_ok=True)
+
+    names = os.listdir(dataset_dir)
+    print(f"Found all persons = {names}")
+
+    for name in names:
+        if 'authorized' in name:
+            continue
+
+        name_data_dir = os.path.join(dataset_dir, name)
+        name_save_dir = os.path.join(aligned_face_dir, name)
+        os.makedirs(name_save_dir, exist_ok=True)
+
+        for i, image in enumerate(os.listdir(name_data_dir)):
+            img_path = os.path.join(name_data_dir, image)
+            img = cv2.imread(img_path)
+            if img is None:
+                print(f"Failed to read {img_path}")
+                continue
+            
+            #for training only 1 face
+            faces = detect_faces(img, app)
+            if faces is None:
+                continue
+            face = faces[0]
+            face_width_px = face['bbox'][2] - face['bbox'][0]
+            if face_width_px<150: #filter based on face width
+                continue
+            
+            aligned_face = align_face(img, face.kps, output_size=(112,112)) #adaface expects this size
+            
+            out_path = os.path.join(name_save_dir, image)
+            cv2.imwrite(out_path, aligned_face)
+
+        
+        print(f"Found {len(os.listdir(name_save_dir))} eligible faces for {name}")
+
+    
 
 if __name__=="__main__":
-    main()
-    process_aligned_faces(face_dir='/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/office_dataset_aligned',
-                          output_dir='/media/ayon/New Volume/Hamim_FR/ha_meem_ai_surveillance/dataset/office_dataset_aligned_sorted'
-                          )
+    main_new()
     
