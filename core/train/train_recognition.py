@@ -43,7 +43,7 @@ CONFIG = {
     'batch_size': 64,
     'test_size': 0.3,
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-    'epochs_warmup': 50,           # head only
+    'epochs_warmup': 80,           # head only
     'epochs_full': 500,            # full fine-tune
     'lr_head': 5e-4,
     'lr_backbone': 5e-6,
@@ -54,7 +54,7 @@ CONFIG = {
     'embedding_size': 512,
     'adaface_repo_path': 'models/AdaFace',
     "voting" : "majority",  # options: "majority" or "nearest",
-    "early_stop_patience": 20,
+    "early_stop_patience": 50,
     "save_best_model" : True
 }
 
@@ -92,10 +92,16 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # 1. Load & prepare data
-    dataset, new_class_names = load_and_filter_data(CONFIG, transform)
+    dataset, new_class_names, label_to_class, class_to_label = load_and_filter_data(CONFIG, transform)
+    
+    task.upload_artifact(
+        name="label_mapping",
+        artifact_object=label_to_class
+    )
+
     logger.report_text(
-    f"Dataset path: {CONFIG['data_dir']}\n"
-    f"Total classes: {len(new_class_names)}\n"
+        f"Dataset path: {CONFIG['data_dir']}\n"
+        f"Total classes: {len(new_class_names)}\n"
     )
 
     logger.report_scalar(
@@ -212,6 +218,7 @@ def main():
             train_lbl,
             test_loader,
             backbone,
+            label_to_class,
             CONFIG
         )
 
