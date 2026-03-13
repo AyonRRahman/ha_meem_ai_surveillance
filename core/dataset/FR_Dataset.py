@@ -58,38 +58,121 @@ class CleanDataset(Dataset):
             self.bad_files.append((idx, path, str(e)))
             dummy = torch.zeros(3, 112, 112, dtype=torch.float32)
             return dummy, torch.tensor(0, dtype=torch.long)
+def load_and_filter_data(
+    config: Dict,
+    transform: transforms.Compose
+) -> Tuple[Dataset, List[str], Dict[int, str], Dict[str, int]]:
 
-def load_and_filter_data(config: Dict, transform: transforms.Compose) -> Tuple[Dataset, List[str]]:
     """
     Load dataset, filter classes with min samples, remap labels to 0..N-1.
-    Returns: (dataset, list of new class names)
+
+    Returns:
+        dataset
+        new_class_names
+        label_to_class
+        class_to_label
     """
+
     print("Loading and filtering dataset...")
+
     raw_dataset = NonEmptyImageFolder(config['data_dir'], transform=None)
 
     all_paths = [s[0] for s in raw_dataset.samples]
     original_labels = np.array([s[1] for s in raw_dataset.samples])
 
     class_counts = Counter(original_labels)
-    valid_old_classes = [c for c, cnt in class_counts.items() if cnt >= config['min_samples_per_class']]
+
+    valid_old_classes = [
+        c for c, cnt in class_counts.items()
+        if cnt >= config['min_samples_per_class']
+    ]
 
     print(f"Classes with >= {config['min_samples_per_class']} images: {len(valid_old_classes)}")
 
     valid_mask = np.isin(original_labels, valid_old_classes)
-    filtered_paths = [p for p, keep in zip(all_paths, valid_mask) if keep]
+
+    filtered_paths = [
+        p for p, keep in zip(all_paths, valid_mask)
+        if keep
+    ]
+
     filtered_old_labels = original_labels[valid_mask]
 
     sorted_valid_old = sorted(valid_old_classes)
-    old_to_new_map = {old: new for new, old in enumerate(sorted_valid_old)}
-    remapped_labels = np.array([old_to_new_map[lbl] for lbl in filtered_old_labels])
 
-    new_class_names = [raw_dataset.classes[old] for old in sorted_valid_old]
+    old_to_new_map = {
+        old: new
+        for new, old in enumerate(sorted_valid_old)
+    }
+
+    remapped_labels = np.array([
+        old_to_new_map[lbl]
+        for lbl in filtered_old_labels
+    ])
+
+    new_class_names = [
+        raw_dataset.classes[old]
+        for old in sorted_valid_old
+    ]
+
     num_classes = len(new_class_names)
 
     print(f"Final dataset: {num_classes} classes, {len(remapped_labels)} samples")
     print(f"Label range: min={remapped_labels.min()}, max={remapped_labels.max()}")
 
-    dataset = CleanDataset(filtered_paths, remapped_labels, transform=transform)
+    # -----------------------------
+    # Create mapping dictionaries
+    # -----------------------------
+    label_to_class = {
+        idx: name
+        for idx, name in enumerate(new_class_names)
+    }
+
+    class_to_label = {
+        name: idx
+        for idx, name in enumerate(new_class_names)
+    }
+
+    dataset = CleanDataset(
+        filtered_paths,
+        remapped_labels,
+        transform=transform
+    )
+
+    return dataset, new_class_names, label_to_class, class_to_label
+
+
+# def load_and_filter_data(config: Dict, transform: transforms.Compose) -> Tuple[Dataset, List[str]]:
+#     """
+#     Load dataset, filter classes with min samples, remap labels to 0..N-1.
+#     Returns: (dataset, list of new class names)
+#     """
+#     print("Loading and filtering dataset...")
+#     raw_dataset = NonEmptyImageFolder(config['data_dir'], transform=None)
+
+#     all_paths = [s[0] for s in raw_dataset.samples]
+#     original_labels = np.array([s[1] for s in raw_dataset.samples])
+
+#     class_counts = Counter(original_labels)
+#     valid_old_classes = [c for c, cnt in class_counts.items() if cnt >= config['min_samples_per_class']]
+
+#     print(f"Classes with >= {config['min_samples_per_class']} images: {len(valid_old_classes)}")
+
+#     valid_mask = np.isin(original_labels, valid_old_classes)
+#     filtered_paths = [p for p, keep in zip(all_paths, valid_mask) if keep]
+#     filtered_old_labels = original_labels[valid_mask]
+
+#     sorted_valid_old = sorted(valid_old_classes)
+#     old_to_new_map = {old: new for new, old in enumerate(sorted_valid_old)}
+#     remapped_labels = np.array([old_to_new_map[lbl] for lbl in filtered_old_labels])
+
+#     new_class_names = [raw_dataset.classes[old] for old in sorted_valid_old]
+#     num_classes = len(new_class_names)
+
+#     print(f"Final dataset: {num_classes} classes, {len(remapped_labels)} samples")
+#     print(f"Label range: min={remapped_labels.min()}, max={remapped_labels.max()}")
+
+#     dataset = CleanDataset(filtered_paths, remapped_labels, transform=transform)
     return dataset, new_class_names
 # def load_and_filter_data(config: Dict) -> Tuple[Dataset, List[str]]:
 #     print("Loading and filtering dataset...")
