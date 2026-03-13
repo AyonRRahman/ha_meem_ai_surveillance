@@ -100,7 +100,7 @@ def compute_class_accuracy(y_true, y_pred):
 # ------------------------------------------------------------
 # Print results nicely
 # ------------------------------------------------------------
-def print_results(results):
+def print_results(results, label_to_class):
 
     print("\nEvaluation Results")
     print("-------------------")
@@ -126,7 +126,8 @@ def print_results(results):
     print("\nClass Accuracy:")
 
     for c, v in results["class_accuracy"].items():
-        print(f"Class {c}: {v:.3f}")
+        # print(f"Class {c}: {v:.3f}")
+        print(f"{label_to_class[c]}: {v:.3f}")
 
 
 # ------------------------------------------------------------
@@ -137,6 +138,7 @@ def evaluate_faiss(
         train_lbl: np.ndarray,
         test_loader,
         backbone,
+        label_to_class: Dict,
         config: Dict
     ) -> Dict[str, Any]:
 
@@ -233,7 +235,7 @@ def evaluate_faiss(
         "total": total
     }
 
-    print_results(results)
+    print_results(results, label_to_class)
 
     return results
 
