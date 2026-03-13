@@ -43,8 +43,8 @@ CONFIG = {
     'batch_size': 64,
     'test_size': 0.3,
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-    'epochs_warmup': 2,           # head only
-    'epochs_full': 2,            # full fine-tune
+    'epochs_warmup': 50,           # head only
+    'epochs_full': 500,            # full fine-tune
     'lr_head': 5e-4,
     'lr_backbone': 5e-6,
     'weight_decay': 1e-5,
@@ -53,7 +53,9 @@ CONFIG = {
     'contrast_lambda': 0.5,
     'embedding_size': 512,
     'adaface_repo_path': 'models/AdaFace',
-    "voting" : "majority"  # options: "majority" or "nearest"
+    "voting" : "majority",  # options: "majority" or "nearest",
+    "early_stop_patience": 20,
+    "save_best_model" : True
 }
 
 task.connect(CONFIG)
@@ -126,7 +128,8 @@ def main():
     print("Phase 1: Training head only...")
 
     for epoch in range(CONFIG["epochs_warmup"]):
-
+        head.train()
+        backbone.train()
         stats = train_one_epoch_head_warmup(
             head=head,
             backbone=backbone,
@@ -153,20 +156,7 @@ def main():
         )
 
 
-    # -------------------------------------------------------
-    # Precompute train embeddings for FAISS evaluation
-    # -------------------------------------------------------
-    print("\nCollecting train embeddings for evaluation...")
 
-    train_emb, train_lbl = collect_train_embeddings(backbone, train_loader, CONFIG)
-
-    task.upload_artifact(
-        name="train_embeddings",
-        artifact_object={
-            "embeddings": train_emb,
-            "labels": train_lbl
-        }
-    )
 
 
     # -----------------------------
@@ -177,8 +167,13 @@ def main():
     for param in backbone.parameters():
         param.requires_grad = True
 
+    best_accuracy = 0.0
+    epochs_without_improvement = 0
 
     for epoch in range(CONFIG["epochs_full"]):
+
+        backbone.train()
+        head.train()
 
         stats = train_one_epoch_full(
             backbone=backbone,
@@ -198,7 +193,6 @@ def main():
             f"Loss: {avg_loss:.4f}"
         )
 
-        # ---- training loss logging ----
         logger.report_scalar(
             title="train_loss",
             series="full",
@@ -206,10 +200,12 @@ def main():
             iteration=epoch
         )
 
-        # -------------------------------------------------
-        # Evaluation after each epoch
-        # -------------------------------------------------
+        # -----------------------------
+        # Evaluation
+        # -----------------------------
         print("\nRunning FAISS evaluation...")
+
+        train_emb, train_lbl = collect_train_embeddings(backbone, train_loader, CONFIG)
 
         results = evaluate_faiss(
             train_emb,
@@ -219,103 +215,62 @@ def main():
             CONFIG
         )
 
-        # ----------------------------
-        # ClearML evaluation logging
-        # ----------------------------
+        acc = results["accuracy"]
 
-        logger.report_scalar(
-            title="evaluation",
-            series="accuracy",
-            value=results["accuracy"],
-            iteration=epoch
-        )
+        # -----------------------------
+        # Log evaluation metrics
+        # -----------------------------
+        logger.report_scalar("evaluation", "accuracy", acc, epoch)
+        logger.report_scalar("evaluation", "top1_accuracy", results["top1_accuracy"], epoch)
+        logger.report_scalar("evaluation", "top3_accuracy", results["top3_accuracy"], epoch)
+        logger.report_scalar("evaluation", "top5_accuracy", results["top5_accuracy"], epoch)
+        logger.report_scalar("evaluation", "precision", results["precision_macro"], epoch)
+        logger.report_scalar("evaluation", "recall", results["recall_macro"], epoch)
+        logger.report_scalar("evaluation", "f1", results["f1_macro"], epoch)
+        logger.report_scalar("evaluation", "avg_similarity", results["avg_max_sim"], epoch)
+        logger.report_scalar("evaluation", "median_similarity", results["median_max_sim"], epoch)
+        logger.report_scalar("evaluation", "min_similarity", results["min_max_sim"], epoch)
 
-        logger.report_scalar(
-            title="evaluation",
-            series="top1_accuracy",
-            value=results["top1_accuracy"],
-            iteration=epoch
-        )
+        # -----------------------------
+        # Best model saving
+        # -----------------------------classification_head
+        if acc > best_accuracy:
 
-        logger.report_scalar(
-            title="evaluation",
-            series="top3_accuracy",
-            value=results["top3_accuracy"],
-            iteration=epoch
-        )
+            print(f"\nNew best accuracy: {acc:.4f} (previous {best_accuracy:.4f})")
 
-        logger.report_scalar(
-            title="evaluation",
-            series="top5_accuracy",
-            value=results["top5_accuracy"],
-            iteration=epoch
-        )
+            best_accuracy = acc
+            epochs_without_improvement = 0
 
-        logger.report_scalar(
-            title="evaluation",
-            series="precision",
-            value=results["precision_macro"],
-            iteration=epoch
-        )
+            if CONFIG["save_best_model"]:
 
-        logger.report_scalar(
-            title="evaluation",
-            series="recall",
-            value=results["recall_macro"],
-            iteration=epoch
-        )
+                torch.save(backbone.state_dict(), "best_backbone.pth")
+                torch.save(head.state_dict(), "best_head.pth")
 
-        logger.report_scalar(
-            title="evaluation",
-            series="f1",
-            value=results["f1_macro"],
-            iteration=epoch
-        )
+                # task.upload_artifact("best_backbone", "best_backbone.pth")
+                # task.upload_artifact("best_head", "best_head.pth")
 
-        logger.report_scalar(
-            title="evaluation",
-            series="avg_similarity",
-            value=results["avg_max_sim"],
-            iteration=epoch
-        )
+        else:
 
-        logger.report_scalar(
-            title="evaluation",
-            series="median_similarity",
-            value=results["median_max_sim"],
-            iteration=epoch
-        )
+            epochs_without_improvement += 1
 
-        logger.report_scalar(
-            title="evaluation",
-            series="min_similarity",
-            value=results["min_max_sim"],
-            iteration=epoch
-        )
+            print(
+                f"No improvement for {epochs_without_improvement} epochs "
+                f"(best {best_accuracy:.4f})"
+            )
 
-        logger.report_scalar(
-            title="evaluation",
-            series="samples_above_threshold",
-            value=results["samples_above_threshold"],
-            iteration=epoch
-        )
+        # -----------------------------
+        # Early stopping
+        # -----------------------------
+        if epochs_without_improvement >= CONFIG["early_stop_patience"]:
 
-        logger.report_scalar(
-            title="evaluation",
-            series="threshold_ratio",
-            value=results["threshold_ratio"],
-            iteration=epoch
-        )
+            print("\nEarly stopping triggered.")
+            print(f"Best accuracy achieved: {best_accuracy:.4f}")
+            break
 
 
-    # -----------------------------
-    # Save final models
-    # -----------------------------
-    torch.save(backbone.state_dict(), "backbone_final.pth")
-    torch.save(head.state_dict(), "head_final.pth")
 
-    task.upload_artifact("backbone_model", "backbone_final.pth")
-    task.upload_artifact("classification_head", "head_final.pth")
+    task.upload_artifact("backbone_model", "best_backbone.pth")
+    task.upload_artifact("classification_head", "best_head.pth")
 
     print("All done.")
 
